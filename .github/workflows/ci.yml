@@ -1,0 +1,32 @@
+# =============================================================================
+# SecureVault — Pipeline CI/CD
+#
+# Étapes :
+#   1. Build + Tests (JUnit, Testcontainers)
+#   2. SAST (SpotBugs + FindSecBugs)
+#   3. Secret Detection (Gitleaks)
+#   4. SCA (OWASP Dependency-Check)
+#   5. Build image Docker
+#   6. Scan image (Trivy)
+#   7. Upload rapports de sécurité
+#
+# [SEC] Quality gates : le pipeline échoue si :
+#   - Un test échoue
+#   - FindSecBugs détecte une vuln Medium+
+#   - Gitleaks trouve un secret hardcodé
+#   - OWASP trouve une CVE >= 7.0
+#   - Trivy trouve une CVE CRITICAL dans l'image
+# =============================================================================
+
+name: SecureVault CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  JAVA_VERSION: '21'
+  REGISTRY: 'ghcr.io'
+  IMAGE_NAME: ${{ github.repository  }}/securevault-backend

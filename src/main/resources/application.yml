@@ -1,0 +1,102 @@
+spring:
+  application:
+    name: securevault
+
+ # ── Database ──
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:securevault}
+    username: ${DB_USER:securevault}
+    password: ${DB_PASSWORD:securevault_dev}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate        # Flyway gère le schéma, Hibernate valide seulement
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  # ── Flyway ──
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+    # ── Redis ──
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+
+  # ── Security ──
+  security:
+    require-ssl: false
+
+  # ── JWT ──
+jwt:
+  # Chemins vers les clés RSA (montées via Docker secret ou variable d'env)
+  private-key-path: ${JWT_PRIVATE_KEY_PATH:src/main/resources/keys/private.pem}
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:src/main/resources/keys/public.pem}
+  access-token-expiration-ms: 900000       # 15 minutes
+  refresh-token-expiration-ms: 604800000   # 7 jours
+
+  # ── Crypto ──
+crypto:
+  # Clé maître de chiffrement des secrets (AES-256 = 32 bytes en base64)
+  # En prod : injecter depuis un secret manager, JAMAIS en dur
+  master-key: ${CRYPTO_MASTER_KEY:CHANGE_ME_IN_PRODUCTION_32BYTES!!}
+  pbkdf2-iterations: 310000
+  salt-length-bytes: 16
+  iv-length-bytes: 12
+
+  # ── Rate limiting ──
+rate-limit:
+  login-attempts: 5
+  login-window-seconds: 300
+  lockout-duration-seconds: 900
+
+# ── Springdoc / OpenAPI ──
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+  # Désactivé en production (voir application-prod.yml)
+    enabled: true
+
+
+# ── Logging ──
+logging:
+  level:
+    com.securevault: DEBUG
+    org.springframework.security: INFO
+    # IMPORTANT : ne jamais logger DEBUG en prod (fuites de données)
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+# ── Profil PRODUCTION ──
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  security:
+    require-ssl: true
+
+springdoc:
+  swagger-ui:
+    enabled: false   # Swagger désactivé en prod
+
+logging:
+  level:
+    com.securevault: INFO
+    org.springframework.security: WARN

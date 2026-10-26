@@ -1,0 +1,115 @@
+# =============================================================================
+# SecureVault — Docker Compose (développement local)
+# Usage : make up
+# =============================================================================
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: sv_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       securevault
+      POSTGRES_USER:     securevault
+      POSTGRES_PASSWORD: securevault_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securevault -d securevault"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sv_network
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: sv_redis
+    restart: unless-stopped
+    # [SEC] Redis sans auth en dev uniquement. En prod : requirepass obligatoire
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6380:6380"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - sv_network
+
+  # ── pgAdmin (interface web PostgreSQL) ─────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sv_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    admin@securevault.local
+      PGADMIN_DEFAULT_PASSWORD: pgadmin_dev
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sv_network
+    profiles:
+      # pgAdmin uniquement avec : docker compose --profile tools up
+      - tools
+
+  # ── RedisInsight (interface web Redis) ─────────────────────────────────────
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: sv_redisinsight
+    restart: unless-stopped
+    ports:
+      - "5540:5540"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - sv_network
+    profiles:
+      - tools
+
+  # ── Backend Spring Boot ─────────────────────────────────────────────────────
+
+  backend:
+     build:
+       context: .
+       dockerfile: Dockerfile
+     container_name: sv_backend
+     restart: unless-stopped
+     environment:
+       SPRING_PROFILES_ACTIVE: dev
+       DB_HOST: postgres
+       REDIS_HOST: redis
+       CRYPTO_MASTER_KEY: ${CRYPTO_MASTER_KEY}
+     ports:
+       - "8080:8080"
+     depends_on:
+       postgres:
+         condition: service_healthy
+       redis:
+         condition: service_healthy
+     networks:
+       - sv_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  pgadmin_data:
+
+networks:
+  sv_network:
+    driver: bridge
